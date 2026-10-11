@@ -1,6 +1,6 @@
 import express from "express";
 import cors from "cors";
-import * as helmet from "helmet";
+import { default as helmetMiddleware } from "helmet";
 import { env } from "./config/env.js";
 import { connectDb } from "./db.js";
 import { errorHandler } from "./middleware/error.js";
@@ -16,7 +16,7 @@ import { startReminderScheduler } from "./services/reminders.js";
 
 const app = express();
 app.set("trust proxy", 1); // correct client IPs (rate limiting) behind Render/Railway/Vercel proxies
-app.use(helmet.default());
+app.use(helmetMiddleware());
 app.use(cors({ origin: env.CLIENT_ORIGIN }));
 app.use(express.json({ limit: "1mb" }));
 
