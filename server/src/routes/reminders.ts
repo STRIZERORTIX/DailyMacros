@@ -1,5 +1,5 @@
 import { Router } from "express";
-import rateLimit from "express-rate-limit";
+import { rateLimit } from "express-rate-limit";
 import { z } from "zod";
 import { env, pushConfigured } from "../config/env.js";
 import { HttpError } from "../lib/http.js";

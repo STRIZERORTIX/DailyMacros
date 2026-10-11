@@ -1,6 +1,6 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
-import rateLimit from "express-rate-limit";
+import { rateLimit } from "express-rate-limit";
 import { OAuth2Client } from "google-auth-library";
 import { z } from "zod";
 import { env } from "../config/env.js";
