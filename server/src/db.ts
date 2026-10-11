@@ -1,10 +1,25 @@
 import mongoose from "mongoose";
 import { env } from "./config/env.js";
 
+let connection: Promise<typeof mongoose> | null = null;
+
 export async function connectDb() {
+  if (mongoose.connection.readyState === 1) return mongoose;
+
   mongoose.set("strictQuery", true);
-  await mongoose.connect(env.MONGODB_URI, { serverSelectionTimeoutMS: 8000 });
-  console.log("MongoDB connected");
+  if (!connection) {
+    connection = mongoose
+      .connect(env.MONGODB_URI, { serverSelectionTimeoutMS: 8000 })
+      .then((connected) => {
+        console.log("MongoDB connected");
+        return connected;
+      })
+      .catch((error: unknown) => {
+        connection = null;
+        throw error;
+      });
+  }
+  return connection;
 }
 
 export function dbState(): string {
