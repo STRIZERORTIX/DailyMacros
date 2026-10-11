@@ -1,7 +1,6 @@
 import express from "express";
-import type { RequestHandler } from "express";
 import cors from "cors";
-import { createRequire } from "node:module";
+import helmet from "helmet";
 import { env } from "./config/env.js";
 import { connectDb } from "./db.js";
 import { errorHandler } from "./middleware/error.js";
@@ -16,7 +15,6 @@ import { remindersRouter } from "./routes/reminders.js";
 import { startReminderScheduler } from "./services/reminders.js";
 
 const app = express();
-const helmet = createRequire(import.meta.url)("helmet") as () => RequestHandler;
 app.set("trust proxy", 1); // correct client IPs (rate limiting) behind Render/Railway/Vercel proxies
 app.use(helmet());
 app.use(cors({ origin: env.CLIENT_ORIGIN }));
