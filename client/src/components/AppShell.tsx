@@ -12,14 +12,14 @@ type Tab = "today" | "insights" | "profile";
 type ProfileSection = "targets" | "weight-tracker" | "reminders" | "custom-foods";
 
 const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
-  { id: "profile", label: "Profile", icon: UserRound },
   { id: "today", label: "Tracker", icon: UtensilsCrossed },
   { id: "insights", label: "Insights", icon: BarChart3 },
+  { id: "profile", label: "Profile", icon: UserRound },
 ];
 
 export function AppShell() {
   const { isNewUser, logout } = useAuth();
-  const [tab, setTab] = useState<Tab>("profile");
+  const [tab, setTab] = useState<Tab>("today");
   const [profileSection, setProfileSection] = useState<ProfileSection>("targets");
   const [customFoodName, setCustomFoodName] = useState("");
   const [helpOpen, setHelpOpen] = useState(false);
