@@ -10,6 +10,8 @@ const profileSchema = new Schema(
     weightKg: Number,
     goalWeightKg: Number,
     activityFactor: { type: Number, default: 1.2 },
+    maintenanceKcal: Number,
+    cutTargetKcal: Number,
     deficitKcal: { type: Number, default: 500 },
     calorieAdjustment: Number,
     sundayMaintenance: { type: Boolean, default: true },

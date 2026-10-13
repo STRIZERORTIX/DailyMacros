@@ -39,6 +39,11 @@ const num = (s: string): number | undefined => {
   const n = Number(s);
   return s.trim() !== "" && Number.isFinite(n) && n > 0 ? n : undefined;
 };
+const calorieInput = (s: string): number | undefined => {
+  const n = Number(s);
+  return s.trim() !== "" && Number.isInteger(n) && n >= 500 && n <= 10000 ? n : undefined;
+};
+const roundedMaintenance = (profile: Profile) => Math.round(tdee(profile) / 10) * 10;
 
 function Stepper({
   label,
@@ -170,6 +175,8 @@ export function TargetsForm({
     if (p.activityFactor === 1.465) return 1.55;
     return p.activityFactor ?? 1.2;
   });
+  const [maintenanceInput, setMaintenanceInput] = useState(p.maintenanceKcal ? String(p.maintenanceKcal) : "");
+  const [cutTargetInput, setCutTargetInput] = useState(p.cutTargetKcal ? String(p.cutTargetKcal) : "");
   const [adjustment, setAdjustment] = useState(
     Math.abs(p.calorieAdjustment ?? (p.goalMode === "maintain" ? 0 : p.goalMode === "gain" ? 250 : -(p.deficitKcal ?? 500))),
   );
@@ -180,6 +187,7 @@ export function TargetsForm({
   function changeGoalMode(next: GoalMode) {
     setGoalMode(next);
     setAdjustment(RECOMMENDED_ADJUSTMENT[next]);
+    setCutTargetInput("");
     setOpinion(null);
     const currentWeight = num(weight);
     if (!currentWeight) return;
@@ -188,8 +196,8 @@ export function TargetsForm({
     else if (next === "gain" && (!num(goal) || num(goal)! <= currentWeight)) setGoal(String(Math.min(300, currentWeight + 3)));
   }
 
-  const draft: Profile = useMemo(
-    () => ({
+  const draft: Profile = useMemo(() => {
+    const base: Profile = {
       sex: sex || undefined,
       goalMode,
       age: num(age),
@@ -197,13 +205,35 @@ export function TargetsForm({
       weightKg: num(weight),
       goalWeightKg: num(goal) ?? num(weight),
       activityFactor: activity,
-      deficitKcal: goalMode === "lose" ? adjustment : 0,
-      calorieAdjustment: goalMode === "lose" ? -adjustment : goalMode === "gain" ? adjustment : 0,
+      maintenanceKcal: calorieInput(maintenanceInput),
+      cutTargetKcal: goalMode === "lose" ? calorieInput(cutTargetInput) : undefined,
       proteinPerKg,
       sundayMaintenance: sunday,
-    }),
-    [sex, goalMode, age, height, weight, goal, activity, adjustment, proteinPerKg, sunday],
-  );
+    };
+    const customCutTarget = calorieInput(cutTargetInput);
+    const customDeficit =
+      goalMode === "lose" && customCutTarget !== undefined
+        ? roundedMaintenance(base) - customCutTarget
+        : adjustment;
+    return {
+      ...base,
+      deficitKcal: goalMode === "lose" ? Math.max(0, customDeficit) : 0,
+      calorieAdjustment: goalMode === "lose" ? -customDeficit : goalMode === "gain" ? adjustment : 0,
+    };
+  }, [
+    sex,
+    goalMode,
+    age,
+    height,
+    weight,
+    goal,
+    activity,
+    maintenanceInput,
+    cutTargetInput,
+    adjustment,
+    proteinPerKg,
+    sunday,
+  ]);
 
   const baseProblems: string[] = [];
   if (draft.age !== undefined && (draft.age < 10 || draft.age > 100 || !Number.isInteger(draft.age))) {
@@ -234,12 +264,26 @@ export function TargetsForm({
       goalProblems.push("For a lean-bulk goal, target weight must be above your current weight.");
     }
   }
+  for (const [label, value] of [
+    ["Estimated maintenance", maintenanceInput],
+    ["Cut target", cutTargetInput],
+  ] as const) {
+    if (value.trim() !== "" && calorieInput(value) === undefined) {
+      goalProblems.push(`${label} must be a whole number between 500 and 10,000 kcal.`);
+    }
+  }
+  const customCutTarget = calorieInput(cutTargetInput);
+  if (goalMode === "lose" && customCutTarget !== undefined) {
+    const customDeficit = roundedMaintenance(draft) - customCutTarget;
+    if (customDeficit <= 0) goalProblems.push("Cut target must be lower than estimated maintenance.");
+    if (customDeficit > 1000) goalProblems.push("Cut target cannot be more than 1,000 kcal below estimated maintenance.");
+  }
   const hasGoalWeight = draft.goalWeightKg !== undefined;
   const ready = basicsReady && hasGoalWeight && goalProblems.length === 0;
-  const targets = ready ? plannedTargets(draft) : null;
+  const targets = basicsReady && hasGoalWeight ? plannedTargets(draft) : null;
   const proj = ready ? projection(draft) : null;
   const warnings: string[] = [];
-  if (ready && isFlooredAtBmr(draft)) {
+  if (targets && isFlooredAtBmr(draft)) {
     warnings.push(
       `This deficit would put your target below your estimated resting energy (${n0(bmr(draft))} kcal), so the target is raised to that level.`,
     );
@@ -263,7 +307,9 @@ export function TargetsForm({
         weightKg: draft.weightKg,
         goalWeightKg: draft.goalWeightKg,
         activityFactor: activity,
-        deficitKcal: goalMode === "lose" ? adjustment : 0,
+        maintenanceKcal: calorieInput(maintenanceInput) ?? null,
+        cutTargetKcal: goalMode === "lose" ? calorieInput(cutTargetInput) ?? null : null,
+        deficitKcal: draft.deficitKcal,
         calorieAdjustment: draft.calorieAdjustment,
         proteinPerKg,
         sundayMaintenance: sunday,
@@ -286,6 +332,28 @@ export function TargetsForm({
   const adjustmentLabel = goalMode === "lose" ? "Daily calorie deficit" : "Daily calorie surplus";
   const adjustmentHint =
     goalMode === "lose" ? "below maintenance" : goalMode === "gain" ? "above maintenance" : "no adjustment";
+  const displayedAdjustment =
+    goalMode === "lose" && customCutTarget !== undefined
+      ? roundedMaintenance(draft) - customCutTarget
+      : adjustment;
+
+  function changeCutTarget(value: string) {
+    setCutTargetInput(value);
+    setOpinion(null);
+    const target = calorieInput(value);
+    if (goalMode === "lose" && target !== undefined) {
+      setAdjustment(Math.max(0, roundedMaintenance(draft) - target));
+    }
+  }
+
+  function changeAdjustment(value: number) {
+    setAdjustment(value);
+    if (goalMode === "lose") {
+      const target = roundedMaintenance(draft) - value;
+      setCutTargetInput(target >= 500 && target <= 10000 ? String(target) : "");
+    }
+    setOpinion(null);
+  }
 
   return (
     <div className="space-y-4">
@@ -440,7 +508,12 @@ export function TargetsForm({
                     ? "Your current weight is prefilled as the weight you want to maintain."
                     : goalMode === "lose"
                       ? "Choose a realistic weight below your current weight."
-                      : "Choose a gradual target above your current weight for a lean bulk."}
+                      : "Choose a gradual target above your current weight for a lean bulk."}{" "}
+                  {goalMode === "lose"
+                    ? "Your target weight sets the progress estimate; daily calories are controlled by the deficit below."
+                    : goalMode === "gain"
+                      ? "Your target weight sets the progress estimate; daily calories are controlled by the surplus below."
+                      : "Your target weight sets the progress estimate; daily calories are based on maintenance."}
                 </p>
               </div>
 
@@ -448,12 +521,12 @@ export function TargetsForm({
                 <Stepper
                   label={adjustmentLabel}
                   hint={adjustmentHint}
-                  value={adjustment}
-                  display={`${adjustment} kcal`}
+                  value={displayedAdjustment}
+                  display={`${displayedAdjustment} kcal`}
                   step={50}
                   min={0}
                   max={goalMode === "lose" ? 1000 : 500}
-                  onChange={setAdjustment}
+                  onChange={changeAdjustment}
                 />
               )}
               <Stepper
@@ -494,13 +567,20 @@ export function TargetsForm({
             </CardContent>
           </Card>
 
-          {!isOnboarding && ready && targets && (
+          {!isOnboarding && targets && (
             <PlanPreview
               draft={draft}
               weekday={targets.weekday}
               sundayTarget={targets.sunday}
               projectionText={projectionText(proj, goalDate)}
               warnings={warnings}
+              maintenanceInput={maintenanceInput}
+              cutTargetInput={cutTargetInput}
+              onMaintenanceChange={(value) => {
+                setMaintenanceInput(value);
+                setOpinion(null);
+              }}
+              onCutTargetChange={changeCutTarget}
             />
           )}
         </>
@@ -513,6 +593,13 @@ export function TargetsForm({
           sundayTarget={targets.sunday}
           projectionText={projectionText(proj, goalDate)}
           warnings={warnings}
+          maintenanceInput={maintenanceInput}
+          cutTargetInput={cutTargetInput}
+          onMaintenanceChange={(value) => {
+            setMaintenanceInput(value);
+            setOpinion(null);
+          }}
+          onCutTargetChange={changeCutTarget}
         >
           <Card>
             <CardContent className="space-y-3 py-5">
@@ -566,6 +653,10 @@ function PlanPreview({
   sundayTarget,
   projectionText: forecast,
   warnings,
+  maintenanceInput,
+  cutTargetInput,
+  onMaintenanceChange,
+  onCutTargetChange,
   children,
 }: {
   draft: Profile;
@@ -573,6 +664,10 @@ function PlanPreview({
   sundayTarget: DayTargets;
   projectionText: string | null;
   warnings: string[];
+  maintenanceInput: string;
+  cutTargetInput: string;
+  onMaintenanceChange: (value: string) => void;
+  onCutTargetChange: (value: string) => void;
   children?: ReactNode;
 }) {
   const maintenance = Math.round(tdee(draft) / 10) * 10;
@@ -588,8 +683,50 @@ function PlanPreview({
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="grid grid-cols-2 gap-2">
-            <Stat label="Estimated maintenance" value={n0(maintenance)} unit="kcal/day" />
-            <Stat label={targetLabel} value={n0(weekday.kcal)} unit="kcal/day" className="text-primary" />
+            <div className="min-w-0 rounded-lg bg-muted p-3">
+              <Label htmlFor="estimated-maintenance" className="text-xs font-normal text-muted-foreground">
+                Estimated maintenance
+              </Label>
+              <div className="mt-1 flex min-w-0 items-center gap-1">
+                <Input
+                  id="estimated-maintenance"
+                  type="number"
+                  inputMode="numeric"
+                  min={500}
+                  max={10000}
+                  step={10}
+                  value={maintenanceInput}
+                  placeholder={n0(maintenance)}
+                  onChange={(event) => onMaintenanceChange(event.target.value)}
+                  className="h-8 min-w-0 px-2 text-lg font-bold tabular-nums"
+                />
+                <span className="shrink-0 text-[10px] text-muted-foreground">kcal/day</span>
+              </div>
+            </div>
+            {draft.goalMode === "lose" ? (
+              <div className="min-w-0 rounded-lg bg-muted p-3">
+                <Label htmlFor="cut-target" className="text-xs font-normal text-muted-foreground">
+                  {targetLabel}
+                </Label>
+                <div className="mt-1 flex min-w-0 items-center gap-1">
+                  <Input
+                    id="cut-target"
+                    type="number"
+                    inputMode="numeric"
+                    min={500}
+                    max={10000}
+                    step={10}
+                    value={cutTargetInput}
+                    placeholder={n0(weekday.kcal)}
+                    onChange={(event) => onCutTargetChange(event.target.value)}
+                    className="h-8 min-w-0 px-2 text-lg font-bold tabular-nums text-primary"
+                  />
+                  <span className="shrink-0 text-[10px] text-muted-foreground">kcal/day</span>
+                </div>
+              </div>
+            ) : (
+              <Stat label={targetLabel} value={n0(weekday.kcal)} unit="kcal/day" className="text-primary" />
+            )}
           </div>
           {weekday.kcal !== sundayTarget.kcal && (
             <p className="text-xs text-muted-foreground">

@@ -60,7 +60,7 @@ export async function searchUsda(q: string): Promise<FoodResult[]> {
   const query = q.toLowerCase().trim();
   return cached(`usda:search:${query}`, async () => {
     const url =
-      `${BASE}/foods/search?query=${encodeURIComponent(query)}&pageSize=12` +
+      `${BASE}/foods/search?query=${encodeURIComponent(query)}&pageSize=50` +
       `&dataType=${encodeURIComponent(DATA_TYPES)}&api_key=${encodeURIComponent(key)}`;
     const data = await fetchJson<{ foods?: UsdaFood[] }>(url);
     return (data.foods ?? []).map(toFood).filter((x): x is FoodResult => x !== null);

@@ -26,12 +26,12 @@ const STEPS = [
   {
     icon: Target,
     title: "Set targets once",
-    body: "Open Profile → Targets. Enter age, height, weight and how hard you train. Save. Today then uses your real calorie and protein numbers instead of the default 2,400 kcal.",
+    body: "Open Profile → Goals to enter your details and customize your plan. Your saved calorie and nutrition targets appear under Profile → Targets and in Tracker.",
   },
   {
     icon: Weight,
     title: "Weigh in most mornings",
-    body: "Profile → Weight. Same time each day, after the toilet and before eating. Trust the 7-day average, not a single morning.",
+    body: "Profile → Weight Tracker. Same time each day, after the toilet and before eating. See your weigh-in history in Insights, and trust the 7-day average, not a single morning.",
   },
   {
     icon: BarChart3,
@@ -41,7 +41,7 @@ const STEPS = [
   {
     icon: CircleHelp,
     title: "You are set",
-    body: "Open Profile and tap How to use any time to see this again. If a food is missing, create it once and it will show up in search afterwards.",
+    body: "Tap the book icon in the header to see this again. If a food is missing, create it once and it will show up in search afterwards.",
   },
 ];
 

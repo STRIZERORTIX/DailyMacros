@@ -3,7 +3,7 @@ import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { parseDate, toDateStr } from "@/lib/date";
+import { formatDayMonthYear, parseDate, toDateStr } from "@/lib/date";
 
 function compactDate(s: string) {
   return parseDate(s).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
@@ -15,6 +15,7 @@ export function DatePicker({
   max,
   min,
   id,
+  dateFormat = "compact",
   children,
 }: {
   value: string;
@@ -22,6 +23,7 @@ export function DatePicker({
   max?: string;
   min?: string;
   id?: string;
+  dateFormat?: "compact" | "day-month-year";
   children?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -35,7 +37,7 @@ export function DatePicker({
         {children ?? (
           <Button id={id} type="button" variant="outline" className="w-full justify-start font-normal">
             <CalendarIcon />
-            {compactDate(value)}
+            {dateFormat === "day-month-year" ? formatDayMonthYear(value) : compactDate(value)}
           </Button>
         )}
       </PopoverTrigger>

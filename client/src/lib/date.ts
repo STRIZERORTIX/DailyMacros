@@ -8,6 +8,11 @@ export const parseDate = (s: string) => {
   return new Date(y, m - 1, d);
 };
 
+export const formatDayMonthYear = (s: string) => {
+  const date = parseDate(s);
+  return `${pad(date.getDate())}-${date.toLocaleDateString("en-IN", { month: "long" })}-${date.getFullYear()}`;
+};
+
 export const todayStr = () => toDateStr(new Date());
 
 export const addDays = (s: string, n: number) => {

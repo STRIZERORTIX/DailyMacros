@@ -62,7 +62,7 @@ export function LoginScreen() {
   const googleReady = Boolean(config?.googleClientId);
 
   return (
-    <main className="relative isolate flex min-h-dvh items-center justify-center overflow-hidden bg-background px-4 py-10">
+    <main className="relative isolate flex min-h-dvh items-center justify-center bg-background px-4 py-10">
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
         <div className="absolute -left-28 -top-24 size-80 rounded-full bg-primary/10 blur-3xl" />
         <div className="absolute -bottom-32 -right-24 size-96 rounded-full bg-chart-2/10 blur-3xl" />
@@ -75,7 +75,7 @@ export function LoginScreen() {
             <img
               src="/Logo.png"
               alt="Daily Macros — Fuel by Frame"
-              className="mx-auto h-24 w-full rounded-lg object-cover object-center"
+              className="mx-auto block h-auto w-full max-w-[18rem] object-contain"
             />
             <div className="space-y-2">
               {/* <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Daily Macros</p> */}

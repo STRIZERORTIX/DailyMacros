@@ -1,31 +1,20 @@
-import { Minus, Plus, Trash2 } from "lucide-react";
+import { Minus, Plus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { DatePicker } from "@/components/DatePicker";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
 import { api, errMsg } from "@/lib/api";
-import { parseDate, todayStr } from "@/lib/date";
+import { formatDayMonthYear, todayStr } from "@/lib/date";
 import { round } from "@/lib/nutrition";
 import { dayIndex, latestPoint, slopePerWeek, trendAdvice, weeklyAverages, type WeightPoint } from "@/lib/weight";
 import { cn } from "@/lib/utils";
 
-const shortDate = (d: string) => parseDate(d).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+const shortDate = formatDayMonthYear;
 
 function Sparkline({ points, goalKg }: { points: WeightPoint[]; goalKg?: number }) {
   if (points.length < 2) {
@@ -99,7 +88,6 @@ export function WeightLog({
   const [date, setDate] = useState(today);
   const [kg, setKg] = useState(latest ? String(latest.weightKg) : "");
   const [busy, setBusy] = useState(false);
-  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 
   const avg = weeklyAverages(entries, today);
   const slope = slopePerWeek(entries, today);
@@ -137,15 +125,6 @@ export function WeightLog({
     }
   }
 
-  async function remove(d: string) {
-    try {
-      await api(`/weights/${d}`, { method: "DELETE" });
-      onChanged();
-    } catch (e) {
-      toast.error(errMsg(e));
-    }
-  }
-
   return (
     <div className="space-y-4">
       <Card>
@@ -161,7 +140,7 @@ export function WeightLog({
           </ol>
           <div className="space-y-2">
             <Label htmlFor="w-date">Date</Label>
-            <DatePicker id="w-date" value={date} onChange={setDate} max={today} />
+            <DatePicker id="w-date" value={date} onChange={setDate} max={today} dateFormat="day-month-year" />
           </div>
           <div className="space-y-2">
             <Label htmlFor="w-kg">Weight (kg)</Label>
@@ -227,60 +206,6 @@ export function WeightLog({
         </Card>
       )}
 
-      {entries.length > 0 && (
-        <Card className="gap-0 overflow-hidden py-0">
-          <CardHeader className="px-4 py-3">
-            <CardTitle>History</CardTitle>
-          </CardHeader>
-          <Separator />
-          <ul>
-            {[...entries]
-              .reverse()
-              .slice(0, 14)
-              .map((e, i) => (
-                <li key={e.date}>
-                  {i > 0 && <Separator />}
-                  <div className="flex items-center justify-between px-4 py-2">
-                    <span className="text-sm text-muted-foreground">{shortDate(e.date)}</span>
-                    <span className="flex items-center gap-2">
-                      <span className="font-medium tabular-nums">{e.weightKg} kg</span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setPendingDelete(e.date)}
-                        aria-label={`Delete ${shortDate(e.date)}`}
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </span>
-                  </div>
-                </li>
-              ))}
-          </ul>
-        </Card>
-      )}
-
-      <AlertDialog open={pendingDelete !== null} onOpenChange={(open) => !open && setPendingDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this weigh-in?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {pendingDelete ? `${shortDate(pendingDelete)} will be removed from your history.` : ""}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Keep it</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              onClick={() => {
-                if (pendingDelete) void remove(pendingDelete);
-              }}
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

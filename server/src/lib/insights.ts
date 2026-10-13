@@ -2,7 +2,7 @@ import { MEALS, type Meal } from "./constants.js";
 import { dayTargets, type Profile } from "./calc.js";
 import { eachDate, shiftDate } from "./dates.js";
 import { emptyTotals, sumTotals, type Totals } from "./nutrition.js";
-import { slopePerWeek, weeklyAverages, type WeightPoint } from "./weight.js";
+import type { WeightPoint } from "./weight.js";
 
 export type InsightEntry = { date: string; meal: Meal; totals: Totals };
 
@@ -78,23 +78,6 @@ export function buildInsights(input: {
     MEALS.map((m) => [m, sumTotals(days.map((d) => d.byMeal[m])).kcal]),
   ) as Record<Meal, number>;
 
-  let bestDay: { date: string; kcal: number; targetKcal: number } | null = null;
-  let worstDay: { date: string; kcal: number; targetKcal: number } | null = null;
-  for (const d of loggedDays) {
-    const miss = Math.abs(d.totals.kcal - d.target.kcal);
-    if (!bestDay || miss < Math.abs(bestDay.kcal - bestDay.targetKcal)) {
-      bestDay = { date: d.date, kcal: d.totals.kcal, targetKcal: d.target.kcal };
-    }
-    const over = d.totals.kcal - d.target.kcal;
-    if (!worstDay || over > worstDay.kcal - worstDay.targetKcal) {
-      worstDay = { date: d.date, kcal: d.totals.kcal, targetKcal: d.target.kcal };
-    }
-  }
-
-  const week = weeklyAverages(weights, to);
-  const slope = slopePerWeek(weights, to);
-  const latest = weights.reduce<WeightPoint | null>((a, b) => (!a || b.date > a.date ? b : a), null);
-
   return {
     range,
     from,
@@ -110,14 +93,8 @@ export function buildInsights(input: {
       hitProteinDays: loggedDays.filter((d) => d.hitProtein).length,
       streak: loggingStreak(new Set(loggedDates), to),
     },
-    bestDay,
-    worstDay,
     weight: {
-      latestKg: latest?.weightKg ?? null,
-      latestDate: latest?.date ?? null,
-      avg7d: week.current,
-      avg7dChange: week.change,
-      slopePerWeek: slope === null ? null : Math.round(slope * 100) / 100,
+      entries: weights.filter((point) => point.date >= from && point.date <= to),
     },
   };
 }

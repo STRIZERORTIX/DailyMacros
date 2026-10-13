@@ -29,8 +29,8 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(data?.title ?? "Daily Macros", {
       body: data?.body ?? "It's time to log your meal in Daily Macros.",
-      icon: "/Logo.png",
-      badge: "/Logo.png",
+      icon: "/pwa-icon-192.png",
+      badge: "/pwa-icon-192.png",
       tag: data?.tag,
       data: { url: data?.url ?? "/" },
     }),

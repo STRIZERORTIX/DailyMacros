@@ -15,7 +15,7 @@ foodsRouter.use(requireAuth);
 
 const searchQuery = z.object({
   q: z.string().trim().min(2).max(80),
-  limit: z.coerce.number().int().min(1).max(50).default(25), // caps local results; online sources return up to 12 each
+  limit: z.coerce.number().int().min(1).max(50).default(25),
   sources: z.string().optional(), // comma list of custom,local,usda,off (default: all)
 });
 
@@ -38,7 +38,7 @@ foodsRouter.get("/search", async (req, res) => {
   const warnings: string[] = [];
 
   const [custom, local, usda, off] = await Promise.all([
-    want.has("custom") ? searchCustom(req.userId!, q.q, 10) : [],
+    want.has("custom") ? searchCustom(req.userId!, q.q, q.limit) : [],
     want.has("local") ? searchLocal(q.q, q.limit) : [],
     want.has("usda") ? settle(searchUsda(q.q), "USDA", warnings) : [],
     want.has("off") && q.q.length >= 3 ? settle(searchOff(q.q), "Open Food Facts", warnings) : [],

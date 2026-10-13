@@ -70,9 +70,9 @@ export function DaySummary({ totals, targets }: { totals: Nutrients; targets: Da
   return (
     <Card className="py-4">
       <CardContent className="space-y-3">
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col items-center gap-4 sm:flex-row">
           <CalorieRing eaten={totals.kcal} target={targets.kcal} />
-          <div className="flex-1 space-y-3">
+          <div className="w-full min-w-0 space-y-3 sm:flex-1">
             <MacroBar
               label="Protein"
               value={totals.protein}

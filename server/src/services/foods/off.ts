@@ -54,7 +54,7 @@ export async function searchOff(q: string): Promise<FoodResult[]> {
   return cached(`off:search:in:${query}`, async () => {
     const url =
       `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}` +
-      `&search_simple=1&action=process&json=1&page_size=12&fields=${FIELDS}` +
+      `&search_simple=1&action=process&json=1&page_size=50&fields=${FIELDS}` +
       `&tagtype_0=countries&tag_contains_0=contains&tag_0=india`;
     const data = await fetchJson<{ products?: OffProduct[] }>(url, HEADERS, 9000);
     return (data.products ?? []).map(toFood).filter((x): x is FoodResult => x !== null);

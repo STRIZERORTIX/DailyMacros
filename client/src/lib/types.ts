@@ -30,6 +30,23 @@ export type FoodResult = {
   lastServings?: number;
 };
 
+export type CustomFoodRecord = {
+  _id: string;
+  name: string;
+  aliases: string[];
+  per100g: Nutrients;
+  servings: Serving[];
+};
+
+export type SavedMeal = {
+  _id: string;
+  name: string;
+  items: {
+    food: Pick<FoodResult, "source" | "externalId" | "name" | "per100g">;
+    grams: number;
+  }[];
+};
+
 export type LogEntry = {
   _id: string;
   date: string;
@@ -55,6 +72,8 @@ export type Profile = {
   weightKg?: number;
   goalWeightKg?: number;
   activityFactor?: number;
+  maintenanceKcal?: number | null;
+  cutTargetKcal?: number | null;
   deficitKcal?: number;
   calorieAdjustment?: number;
   sundayMaintenance?: boolean;
@@ -107,13 +126,7 @@ export type Insights = {
     hitProteinDays: number;
     streak: number;
   };
-  bestDay: { date: string; kcal: number; targetKcal: number } | null;
-  worstDay: { date: string; kcal: number; targetKcal: number } | null;
   weight: {
-    latestKg: number | null;
-    latestDate: string | null;
-    avg7d: number | null;
-    avg7dChange: number | null;
-    slopePerWeek: number | null;
+    entries: { date: string; weightKg: number }[];
   };
 };

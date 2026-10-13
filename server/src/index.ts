@@ -13,6 +13,7 @@ import { insightsRouter } from "./routes/insights.js";
 import { logsRouter } from "./routes/logs.js";
 import { weightsRouter } from "./routes/weights.js";
 import { remindersRouter } from "./routes/reminders.js";
+import { savedMealsRouter } from "./routes/savedMeals.js";
 import { startReminderScheduler } from "./services/reminders.js";
 
 const app = express();
@@ -40,6 +41,7 @@ app.use("/api/auth", authRouter);
 app.use("/api/logs", logsRouter);
 app.use("/api/weights", weightsRouter);
 app.use("/api/custom-foods", customFoodsRouter);
+app.use("/api/saved-meals", savedMealsRouter);
 app.use("/api/foods", foodsRouter);
 app.use("/api/insights", insightsRouter);
 app.use("/api/reminders", remindersRouter);

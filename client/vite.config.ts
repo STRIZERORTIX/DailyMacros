@@ -15,7 +15,7 @@ export default defineConfig({
       srcDir: "src",
       filename: "sw.ts",
       registerType: "autoUpdate",
-      includeAssets: ["Logo.png"],
+      includeAssets: ["Logo.png", "pwa-icon.svg", "pwa-icon-192.png", "pwa-icon-512.png", "apple-touch-icon.png"],
       manifest: {
         name: "Daily Macros",
         short_name: "Daily Macros",
@@ -28,8 +28,20 @@ export default defineConfig({
         start_url: "/",
         icons: [
           {
-            src: "/Logo.png",
-            sizes: "1319x1319",
+            src: "/pwa-icon.svg",
+            sizes: "any",
+            type: "image/svg+xml",
+            purpose: "any",
+          },
+          {
+            src: "/pwa-icon-192.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "any",
+          },
+          {
+            src: "/pwa-icon-512.png",
+            sizes: "512x512",
             type: "image/png",
             purpose: "any",
           },

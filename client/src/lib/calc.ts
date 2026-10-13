@@ -44,7 +44,7 @@ export function bmr(p: Profile): number {
 
 /** Maintenance calories (total daily energy expenditure). */
 export function tdee(p: Profile): number {
-  return bmr(p) * (p.activityFactor ?? 1.2);
+  return p.maintenanceKcal ?? bmr(p) * (p.activityFactor ?? 1.2);
 }
 
 const round10 = (n: number) => Math.round(n / 10) * 10;
@@ -74,7 +74,11 @@ export function dayTargets(p: Profile, date: string): DayTargets {
       p.calorieAdjustment ??
       (goalMode === "maintain" ? 0 : goalMode === "gain" ? 250 : -(p.deficitKcal ?? 500));
     maintenanceDay = goalMode === "lose" && (p.sundayMaintenance ?? true) && isSunday(date);
-    const target = maintenanceDay ? maintenance : maintenance + adjustment;
+    const target = maintenanceDay
+      ? maintenance
+      : goalMode === "lose"
+        ? p.cutTargetKcal ?? maintenance + adjustment
+        : maintenance + adjustment;
     kcal = round10(Math.max(target, bmr(p))); // never plan below BMR
     protein = Math.round(((p.proteinPerKg ?? 1.6) * (p.weightKg ?? 0)) / 5) * 5;
   }
@@ -97,7 +101,7 @@ export function plannedTargets(p: Profile): { weekday: DayTargets; sunday: DayTa
 export function isFlooredAtBmr(p: Profile): boolean {
   if (!isProfileComplete(p) || (p.goalMode && p.goalMode !== "lose")) return false;
   const adjustment = p.calorieAdjustment ?? -(p.deficitKcal ?? 500);
-  return tdee(p) + adjustment < bmr(p);
+  return (p.cutTargetKcal ?? tdee(p) + adjustment) < bmr(p);
 }
 
 export type Projection = {

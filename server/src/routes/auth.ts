@@ -41,6 +41,8 @@ const profileSchema = z
     weightKg: z.number().min(30).max(300),
     goalWeightKg: z.number().min(30).max(300),
     activityFactor: z.number().min(1.1).max(2.2),
+    maintenanceKcal: z.number().int().min(500).max(10000).nullable(),
+    cutTargetKcal: z.number().int().min(500).max(10000).nullable(),
     deficitKcal: z.number().min(0).max(1000),
     calorieAdjustment: z.number().min(-1000).max(500),
     sundayMaintenance: z.boolean(),
@@ -116,13 +118,19 @@ authRouter.get("/me", requireAuth, async (req, res) => {
 authRouter.patch("/me", requireAuth, async (req, res) => {
   const b = updateMeSchema.parse(req.body);
   const set: Record<string, unknown> = {};
+  const unset: Record<string, ""> = {};
   if (b.name !== undefined) set.name = b.name;
   for (const [k, v] of Object.entries(b.profile ?? {})) {
-    if (v !== undefined) set[`profile.${k}`] = v;
+    if (v === null) unset[`profile.${k}`] = "";
+    else if (v !== undefined) set[`profile.${k}`] = v;
   }
+  const update = {
+    ...(Object.keys(set).length > 0 ? { $set: set } : {}),
+    ...(Object.keys(unset).length > 0 ? { $unset: unset } : {}),
+  };
   const user =
-    Object.keys(set).length > 0
-      ? await User.findByIdAndUpdate(req.userId, { $set: set }, { new: true })
+    Object.keys(update).length > 0
+      ? await User.findByIdAndUpdate(req.userId, update, { new: true })
       : await User.findById(req.userId);
   if (!user) throw new HttpError(401, "User no longer exists");
   res.json({ user: publicUser(user) });

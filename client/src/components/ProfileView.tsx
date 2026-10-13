@@ -1,33 +1,33 @@
 import { useCallback, useEffect, useState } from "react";
-import { BookOpen } from "lucide-react";
+import { CustomFoodsView } from "@/components/CustomFoodsView";
 import { RemindersSettings } from "@/components/RemindersSettings";
 import { ProfileDetailsSheet } from "@/components/ProfileDetailsSheet";
 import { InstallAppButton } from "@/components/InstallAppButton";
 import { TargetsForm } from "@/components/TargetsForm";
+import { TargetPlanView } from "@/components/TargetPlanView";
 import { WeightLog } from "@/components/WeightLog";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { isProfileComplete } from "@/lib/calc";
 import { addDays, todayStr } from "@/lib/date";
 import type { Profile } from "@/lib/types";
 import { latestPoint, type WeightPoint } from "@/lib/weight";
 
-type Section = "targets" | "weight" | "reminders";
+type Section = "targets" | "weight-tracker" | "reminders" | "custom-foods";
 
 export function ProfileView({
+  initialSection,
+  initialCustomFoodName,
   onSetupComplete,
-  onOpenHelp,
 }: {
+  initialSection: Section;
+  initialCustomFoodName?: string;
   onSetupComplete?: () => void;
-  onOpenHelp: () => void;
 }) {
   const { user } = useAuth();
   const profile: Profile = user?.profile ?? {};
   const displayName = user?.name?.trim() || user?.email.split("@")[0] || "there";
-  // First visit goes straight to setting targets; after that the weight log opens first.
-  const [section, setSection] = useState<Section>(() => (isProfileComplete(profile) ? "weight" : "targets"));
+  const [section, setSection] = useState<Section>(initialSection);
   const [entries, setEntries] = useState<WeightPoint[]>([]);
   const [version, setVersion] = useState(0);
   const reload = useCallback(() => setVersion((v) => v + 1), []);
@@ -54,35 +54,37 @@ export function ProfileView({
           <p className="text-sm text-muted-foreground">Welcome back,</p>
           <h1 className="break-words text-xl font-semibold">{displayName}</h1>
         </div>
-        <div className="flex w-full flex-nowrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 [&>button]:flex-1 [&>button]:justify-center">
           <ProfileDetailsSheet />
-          <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={onOpenHelp}>
-            <BookOpen className="size-4" />
-            <span className="whitespace-nowrap">How to use</span>
-          </Button>
           <InstallAppButton />
         </div>
       </div>
 
       <Tabs value={section} onValueChange={(v) => setSection(v as Section)}>
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="targets">Targets</TabsTrigger>
-          <TabsTrigger value="weight">Weight</TabsTrigger>
-          <TabsTrigger value="reminders">Reminders</TabsTrigger>
+        <TabsList className="grid h-11 w-full grid-cols-4 items-center">
+          <TabsTrigger value="targets" className="h-8 min-w-0 whitespace-normal px-1 text-center text-[11px] leading-tight">Targets</TabsTrigger>
+          <TabsTrigger value="weight-tracker" className="h-8 min-w-0 whitespace-normal px-1 text-center text-[11px] leading-tight">Weight Tracker</TabsTrigger>
+          <TabsTrigger value="reminders" className="h-8 min-w-0 whitespace-normal px-1 text-center text-[11px] leading-tight">Reminders</TabsTrigger>
+          <TabsTrigger value="custom-foods" className="h-8 min-w-0 whitespace-normal px-1 text-center text-[11px] leading-tight">Custom Foods</TabsTrigger>
         </TabsList>
       </Tabs>
 
-      {section === "reminders" ? (
-        <RemindersSettings />
+      {section === "custom-foods" ? (
+        <CustomFoodsView initialName={initialCustomFoodName} />
       ) : section === "targets" ? (
-        <TargetsForm latestWeight={latestPoint(entries)?.weightKg ?? null} onSetupComplete={onSetupComplete} />
-      ) : (
+        <>
+          <TargetPlanView />
+          <TargetsForm latestWeight={latestPoint(entries)?.weightKg ?? null} onSetupComplete={onSetupComplete} />
+        </>
+      ) : section === "weight-tracker" ? (
         <WeightLog
           entries={entries}
           goalKg={profile.goalWeightKg}
           goalMode={profile.goalMode ?? "lose"}
           onChanged={reload}
         />
+      ) : (
+        <RemindersSettings />
       )}
     </div>
   );

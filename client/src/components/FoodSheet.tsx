@@ -41,14 +41,14 @@ import {
   type FoodResult,
   type LogEntry,
   type Meal,
-  type Nutrients,
+  type SavedMeal,
   type Serving,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type Selected = { food: FoodResult; servings: Serving[]; unitKey: string; qty: number };
 type PortionValue = { meal: Meal; grams: number; servingLabel?: string; servings?: number };
-type SearchResp = { results: FoodResult[]; warnings: string[] };
+type SearchResp = { results: FoodResult[] };
 type BarcodeDetectorLike = {
   detect: (source: HTMLVideoElement) => Promise<{ rawValue: string }[]>;
 };
@@ -269,13 +269,15 @@ function SearchStep({
   meal,
   busy,
   onPick,
-  onCreate,
+  onManageCustomFoods,
+  onAddSavedMeal,
   onClose,
 }: {
   meal: Meal;
   busy: boolean;
   onPick: (f: FoodResult) => void;
-  onCreate: (name: string) => void;
+  onManageCustomFoods: (name: string) => void;
+  onAddSavedMeal: (meal: SavedMeal) => void;
   onClose: () => void;
 }) {
   const [q, setQ] = useState("");
@@ -284,8 +286,9 @@ function SearchStep({
   const [online, setOnline] = useState<FoodResult[] | null>(null);
   const [onlineBusy, setOnlineBusy] = useState(false);
   const [onlineError, setOnlineError] = useState<string | null>(null);
-  const [warnings, setWarnings] = useState<string[]>([]);
   const [recent, setRecent] = useState<FoodResult[]>([]);
+  const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
+  const [savedMealsError, setSavedMealsError] = useState<string | null>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
   const term = q.trim();
   const termRef = useRef(term);
@@ -294,6 +297,12 @@ function SearchStep({
     api<{ foods: FoodResult[] }>("/foods/recent")
       .then((r) => setRecent(r.foods))
       .catch(() => {});
+    api<{ meals: SavedMeal[] }>("/saved-meals")
+      .then((r) => {
+        setSavedMeals(r.meals);
+        setSavedMealsError(null);
+      })
+      .catch((e) => setSavedMealsError(errMsg(e)));
   }, []);
 
   // Fast as-you-type search over your own foods and the curated Indian list (no online calls here).
@@ -303,7 +312,6 @@ function SearchStep({
     setOnline(null);
     setOnlineBusy(false);
     setOnlineError(null);
-    setWarnings([]);
     if (term.length < 2) {
       setSearching(false);
       return;
@@ -311,14 +319,14 @@ function SearchStep({
     const ctl = new AbortController();
     setSearching(true);
     const timer = setTimeout(() => {
-      api<SearchResp>(`/foods/search?q=${encodeURIComponent(term)}&sources=custom,local`, { signal: ctl.signal })
+      api<SearchResp>(`/foods/search?q=${encodeURIComponent(term)}&sources=custom,local&limit=50`, { signal: ctl.signal })
         .then((r) => {
           if (ctl.signal.aborted) return;
           setLocal(r.results);
-          if (r.results.length === 0) void searchOnline(term, ctl.signal);
+          void searchOnline(term, ctl.signal);
         })
-        .catch((e) => {
-          if (!ctl.signal.aborted) toast.error(errMsg(e));
+        .catch(() => {
+          if (!ctl.signal.aborted) void searchOnline(term, ctl.signal);
         })
         .finally(() => {
           if (!ctl.signal.aborted) setSearching(false);
@@ -337,9 +345,8 @@ function SearchStep({
       const r = await api<SearchResp>(`/foods/search?q=${encodeURIComponent(forTerm)}&sources=usda,off`, { signal });
       if (termRef.current !== forTerm) return;
       setOnline(r.results);
-      setWarnings(r.warnings);
-    } catch (e) {
-      if (!signal?.aborted && termRef.current === forTerm) setOnlineError(errMsg(e));
+    } catch {
+      if (!signal?.aborted && termRef.current === forTerm) setOnlineError("Online search is temporarily unavailable.");
     } finally {
       if (termRef.current === forTerm) setOnlineBusy(false);
     }
@@ -356,7 +363,7 @@ function SearchStep({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center justify-between px-4 pb-2">
+      <div className="flex shrink-0 items-center justify-between px-4 pb-2">
         <div>
           <h2 className="text-lg font-semibold">Add food</h2>
           <p className="text-xs text-muted-foreground">to {MEAL_LABEL[meal]}</p>
@@ -366,8 +373,8 @@ function SearchStep({
         </Button>
       </div>
 
-      <Command shouldFilter={false} className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-none bg-transparent">
-        <div className="px-2 pb-2">
+      <Command shouldFilter={false} className="flex h-auto min-h-0 flex-1 flex-col overflow-hidden rounded-none bg-transparent">
+        <div className="shrink-0 px-2 pb-2">
           <Button
             type="button"
             variant="outline"
@@ -385,11 +392,35 @@ function SearchStep({
           onValueChange={setQ}
           placeholder="Search: idli, kadala, nendran, moru…"
         />
-        <CommandList className="min-h-0 max-h-none flex-1 overflow-y-auto px-1 pb-8" data-vaul-no-drag>
+        <CommandList className="min-h-0 max-h-none flex-1 overscroll-y-contain overflow-y-auto px-1 pb-8" data-vaul-no-drag>
           {busy && <p className="px-2 py-2 text-xs text-muted-foreground">Loading…</p>}
 
           {term.length < 2 ? (
             <>
+              {savedMealsError && (
+                <Alert variant="destructive" className="mx-2 mb-2">
+                  <AlertDescription>{savedMealsError}</AlertDescription>
+                </Alert>
+              )}
+              {savedMeals.length > 0 && (
+                <CommandGroup heading="Saved meals">
+                  {savedMeals.map((savedMeal) => (
+                    <CommandItem
+                      key={savedMeal._id}
+                      value={`saved-meal:${savedMeal._id}`}
+                      disabled={busy}
+                      onSelect={() => onAddSavedMeal(savedMeal)}
+                      className="h-auto items-start justify-between gap-3 py-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{savedMeal.name}</p>
+                        <p className="text-xs text-muted-foreground">{savedMeal.items.length} foods</p>
+                      </div>
+                      <span className="shrink-0 text-xs text-primary">Add to {MEAL_LABEL[meal]}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )}
               {recent.length > 0 ? (
                 <CommandGroup heading="Recent">
                   {recent.map((f) => (
@@ -424,8 +455,8 @@ function SearchStep({
               )}
               <CommandSeparator className="my-2" />
               <div className="px-2 pt-2">
-                <Button variant="outline" className="w-full" onClick={() => onCreate("")}>
-                  <Plus className="size-4" /> Create my own food
+                <Button variant="outline" className="w-full" onClick={() => onManageCustomFoods("")}>
+                  <Plus className="size-4" /> Manage custom foods
                 </Button>
               </div>
             </>
@@ -440,16 +471,47 @@ function SearchStep({
                     <EmptyMedia variant="icon">
                       <Search />
                     </EmptyMedia>
-                    <EmptyTitle>No local match</EmptyTitle>
+                    <EmptyTitle>No food found</EmptyTitle>
                     <EmptyDescription>
-                      Checking USDA and packaged-food sources automatically, or create it as your own food.
+                      Try another search, or add this as your own food.
                     </EmptyDescription>
                   </EmptyHeader>
                 </Empty>
               )}
-              {local.length > 0 && (
-                <CommandGroup heading="Your foods and Indian list">
-                  {local.map((f) => (
+              {local.some((f) => f.source === "custom") && (
+                <CommandGroup heading="Your foods">
+                  {local.filter((f) => f.source === "custom").map((f) => (
+                    <FoodRow key={f.id} food={f} onClick={() => onPick(f)} />
+                  ))}
+                </CommandGroup>
+              )}
+              {savedMealsError && (
+                <Alert variant="destructive" className="mx-2 mb-2">
+                  <AlertDescription>{savedMealsError}</AlertDescription>
+                </Alert>
+              )}
+              {savedMeals.length > 0 && (
+                <CommandGroup heading="Saved meals">
+                  {savedMeals.map((savedMeal) => (
+                    <CommandItem
+                      key={savedMeal._id}
+                      value={`saved-meal:${savedMeal._id}`}
+                      disabled={busy}
+                      onSelect={() => onAddSavedMeal(savedMeal)}
+                      className="h-auto items-start justify-between gap-3 py-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{savedMeal.name}</p>
+                        <p className="text-xs text-muted-foreground">{savedMeal.items.length} foods</p>
+                      </div>
+                      <span className="shrink-0 text-xs text-primary">Add to {MEAL_LABEL[meal]}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )}
+              {local.some((f) => f.source === "local") && (
+                <CommandGroup heading="Indian food list">
+                  {local.filter((f) => f.source === "local").map((f) => (
                     <FoodRow key={f.id} food={f} onClick={() => onPick(f)} />
                   ))}
                 </CommandGroup>
@@ -458,13 +520,13 @@ function SearchStep({
               <div className="space-y-2 px-2 pt-3">
                 {onlineBusy && (
                   <p className="py-2 text-center text-sm text-muted-foreground">
-                    No local match. Searching USDA and packaged foods…
+                    Searching…
                   </p>
                 )}
                 {onlineError && (
                   <Alert variant="destructive">
                     <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
-                      <span>Online food search failed: {onlineError}</span>
+                      <span>{onlineError}</span>
                       <Button
                         variant="secondary"
                         size="sm"
@@ -479,16 +541,16 @@ function SearchStep({
                 {online !== null && online.length === 0 && !onlineError ? (
                   <Empty className="border-0 py-4">
                     <EmptyHeader>
-                      <EmptyTitle>Nothing online</EmptyTitle>
-                      <EmptyDescription>USDA and packaged foods had no match for that name.</EmptyDescription>
+                      <EmptyMedia variant="icon">
+                        <Search />
+                      </EmptyMedia>
+                      <EmptyTitle>No food found</EmptyTitle>
+                      <EmptyDescription>
+                        Try another search, or add this as your own food.
+                      </EmptyDescription>
                     </EmptyHeader>
                   </Empty>
                 ) : null}
-                {warnings.map((w) => (
-                  <Alert key={w}>
-                    <AlertDescription>{w}</AlertDescription>
-                  </Alert>
-                ))}
               </div>
               {online && online.length > 0 && (
                 <CommandGroup heading="Online">
@@ -499,8 +561,8 @@ function SearchStep({
               )}
 
               <div className="px-2 pt-4">
-                <Button variant="outline" className="w-full" onClick={() => onCreate(term)}>
-                  <Plus className="size-4" /> Create “{term}” as my own food
+                <Button variant="outline" className="w-full" onClick={() => onManageCustomFoods(term)}>
+                  <Plus className="size-4" /> Create or manage custom foods
                 </Button>
               </div>
             </>
@@ -571,7 +633,7 @@ function PortionStep({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center gap-2 px-2 pb-2">
+      <div className="flex shrink-0 items-center gap-2 px-2 pb-2">
         <Button variant="ghost" size="icon" onClick={onBack} aria-label="Back">
           <ChevronLeft />
         </Button>
@@ -584,7 +646,7 @@ function PortionStep({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 pb-4" data-vaul-no-drag>
+      <div className="min-h-0 flex-1 space-y-5 overscroll-y-contain overflow-y-auto px-4 pb-4" data-vaul-no-drag>
         <div className="rounded-xl border bg-card p-4">
           <p className="text-4xl font-bold tabular-nums">{n0(totals.kcal)}</p>
           <p className="text-xs text-muted-foreground">kcal · {valid ? `${Math.round(grams)} g` : "enter an amount"}</p>
@@ -676,7 +738,7 @@ function PortionStep({
         </div>
       </div>
 
-      <div className="flex gap-2 border-t p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+      <div className="flex shrink-0 gap-2 border-t p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         {editing && onDelete && (
           <Button variant="outline" size="icon" className="shrink-0 text-destructive" onClick={onDelete} aria-label="Remove">
             <Trash2 />
@@ -684,151 +746,6 @@ function PortionStep({
         )}
         <Button className="flex-1" disabled={!valid || busy} onClick={submit}>
           {busy ? "Saving…" : editing ? "Save changes" : `Add to ${MEAL_LABEL[meal]}`}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-/* ---------- custom food step ---------- */
-
-type CreatedFood = { _id: string; name: string; per100g: Nutrients; servings: Serving[] };
-
-function CustomFoodStep({
-  defaultName,
-  onCancel,
-  onCreated,
-}: {
-  defaultName: string;
-  onCancel: () => void;
-  onCreated: (f: FoodResult) => void;
-}) {
-  const [name, setName] = useState(defaultName);
-  const [label, setLabel] = useState("1 serving");
-  const [size, setSize] = useState("100");
-  const [kcal, setKcal] = useState("");
-  const [protein, setProtein] = useState("");
-  const [carbs, setCarbs] = useState("");
-  const [fat, setFat] = useState("");
-  const [fiber, setFiber] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function save() {
-    const g = Number(size);
-    if (!name.trim()) return setError("Give the food a name.");
-    if (!(g > 0)) return setError("Serving size must be more than 0 g.");
-    if (kcal.trim() === "" || !(Number(kcal) >= 0)) return setError("Enter the calories for one serving.");
-
-    const per = (v: string) => ((Number(v) || 0) / g) * 100;
-    const per100g = {
-      kcal: Math.round(per(kcal)),
-      protein: round(per(protein)),
-      carbs: round(per(carbs)),
-      fat: round(per(fat)),
-      fiber: round(per(fiber)),
-    };
-    if (
-      per100g.kcal > 1000 ||
-      per100g.protein > 100 ||
-      per100g.carbs > 100 ||
-      per100g.fat > 100 ||
-      per100g.fiber > 100
-    ) {
-      return setError("Those numbers are too high for that serving size. Check the serving size in grams.");
-    }
-
-    setBusy(true);
-    setError(null);
-    try {
-      const c = await api<CreatedFood>("/custom-foods", {
-        method: "POST",
-        body: { name: name.trim(), per100g, servings: [{ label: label.trim() || "1 serving", grams: g }] },
-      });
-      onCreated({
-        id: `custom:${c._id}`,
-        source: "custom",
-        externalId: c._id,
-        name: c.name,
-        per100g: c.per100g,
-        servings: c.servings,
-      });
-    } catch (e) {
-      setError(errMsg(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function field(
-    id: string,
-    text: string,
-    value: string,
-    set: (v: string) => void,
-    opts?: { unit?: string; placeholder?: string; decimal?: boolean },
-  ) {
-    return (
-      <div className="space-y-2">
-        <Label htmlFor={id}>{text}</Label>
-        <InputGroup>
-          <InputGroupInput
-            id={id}
-            value={value}
-            onChange={(e) => set(e.target.value)}
-            placeholder={opts?.placeholder}
-            inputMode={opts?.decimal ? "decimal" : undefined}
-          />
-          {opts?.unit && (
-            <InputGroupAddon align="inline-end">
-              <InputGroupText>{opts.unit}</InputGroupText>
-            </InputGroupAddon>
-          )}
-        </InputGroup>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center gap-2 px-2 pb-2">
-        <Button variant="ghost" size="icon" onClick={onCancel} aria-label="Back">
-          <ChevronLeft />
-        </Button>
-        <h2 className="text-base font-semibold">Create my own food</h2>
-      </div>
-
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 pb-4" data-vaul-no-drag>
-        <p className="text-xs text-muted-foreground">
-          Copy the numbers from the pack label, or estimate them for a home recipe. For a protein tub, use the values per
-          scoop.
-        </p>
-        {field("cf-name", "Name", name, setName, { placeholder: "e.g. SuperYou protein" })}
-        <div className="grid grid-cols-2 gap-3">
-          {field("cf-label", "One serving is", label, setLabel, { placeholder: "1 scoop" })}
-          {field("cf-size", "Serving size", size, setSize, { unit: "g", decimal: true })}
-        </div>
-        <p className="pt-1 text-sm font-medium">Per serving (from the food label)</p>
-        <div className="grid grid-cols-2 gap-3">
-          {field("cf-kcal", "Calories", kcal, setKcal, { unit: "kcal", decimal: true })}
-          {field("cf-protein", "Protein", protein, setProtein, { unit: "g", decimal: true })}
-          {field("cf-carbs", "Total carbs", carbs, setCarbs, { unit: "g", decimal: true })}
-          {field("cf-fat", "Fat", fat, setFat, { unit: "g", decimal: true })}
-          {field("cf-fiber", "Fibre", fiber, setFiber, { unit: "g", decimal: true })}
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Net carbs are estimated as total carbs minus fibre. Enter the fibre value from the label; if it is not listed,
-          the app cannot subtract it.
-        </p>
-        {error && (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-      </div>
-
-      <div className="border-t p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-        <Button className="w-full" disabled={busy} onClick={save}>
-          {busy ? "Saving…" : "Save and continue"}
         </Button>
       </div>
     </div>
@@ -844,11 +761,11 @@ type BodyProps = {
   onClose: () => void;
   onChanged: () => void;
   onDelete: (e: LogEntry) => void;
+  onManageCustomFoods: (name: string) => void;
 };
 
-function SheetBody({ date, meal, entry, onClose, onChanged, onDelete }: BodyProps) {
+function SheetBody({ date, meal, entry, onClose, onChanged, onDelete, onManageCustomFoods }: BodyProps) {
   const [selected, setSelected] = useState<Selected | null>(() => (entry ? fromEntry(entry) : null));
-  const [creating, setCreating] = useState<string | null>(null); // prefilled name while creating a custom food
   const [currentMeal, setCurrentMeal] = useState<Meal>(entry?.meal ?? meal);
   const [picking, setPicking] = useState(false);
   const [resetKey, setResetKey] = useState(0); // bump to clear the search box after adding something
@@ -916,7 +833,37 @@ function SheetBody({ date, meal, entry, onClose, onChanged, onDelete }: BodyProp
     onChanged();
   }
 
-  const onSearch = !selected && creating === null;
+  async function addSavedMeal(savedMeal: SavedMeal) {
+    setPicking(true);
+    let added = 0;
+    try {
+      for (const item of savedMeal.items) {
+        await api("/logs", {
+          method: "POST",
+          body: {
+            date,
+            meal: currentMeal,
+            food: item.food,
+            grams: item.grams,
+          },
+        });
+        added += 1;
+      }
+      toast.success(`Added ${savedMeal.name} to ${MEAL_LABEL[currentMeal]}`);
+      setResetKey((key) => key + 1);
+    } catch (e) {
+      toast.error(
+        added > 0
+          ? `Added ${added} of ${savedMeal.items.length} foods. The rest could not be added: ${errMsg(e)}`
+          : `Could not add saved meal: ${errMsg(e)}`,
+      );
+    } finally {
+      setPicking(false);
+      if (added > 0) onChanged();
+    }
+  }
+
+  const onSearch = !selected;
 
   return (
     <>
@@ -930,7 +877,11 @@ function SheetBody({ date, meal, entry, onClose, onChanged, onDelete }: BodyProp
             meal={currentMeal}
             busy={picking}
             onPick={pick}
-            onCreate={(name) => setCreating(name)}
+            onManageCustomFoods={(name) => {
+              onClose();
+              onManageCustomFoods(name);
+            }}
+            onAddSavedMeal={(savedMeal) => void addSavedMeal(savedMeal)}
             onClose={onClose}
           />
         </div>
@@ -947,16 +898,6 @@ function SheetBody({ date, meal, entry, onClose, onChanged, onDelete }: BodyProp
         />
       )}
 
-      {!selected && creating !== null && (
-        <CustomFoodStep
-          defaultName={creating}
-          onCancel={() => setCreating(null)}
-          onCreated={(f) => {
-            setCreating(null);
-            setSelected(initialFor(f));
-          }}
-        />
-      )}
     </>
   );
 }
@@ -968,7 +909,7 @@ export function FoodSheet({
 }: { open: boolean; onOpenChange: (open: boolean) => void } & Omit<BodyProps, "onClose">) {
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="mx-auto h-[92dvh] max-h-[92dvh] max-w-md overflow-hidden data-[vaul-drawer-direction=bottom]:max-h-[92dvh]">
+      <DrawerContent className="mx-auto h-[92dvh] max-h-[calc(100dvh-env(safe-area-inset-top))] min-h-0 max-w-md overflow-hidden overscroll-contain data-[vaul-drawer-direction=bottom]:mt-0 data-[vaul-drawer-direction=bottom]:max-h-[calc(100dvh-env(safe-area-inset-top))]">
         <div className="flex min-h-0 flex-1 flex-col">
           <SheetBody {...body} onClose={() => onOpenChange(false)} />
         </div>

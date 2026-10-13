@@ -1,12 +1,12 @@
 import { ChevronLeft, ChevronRight, Copy, Plus } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { DatePicker } from "@/components/DatePicker";
 import { DaySummary } from "@/components/DaySummary";
+import { DatePicker } from "@/components/DatePicker";
 import { FoodSheet } from "@/components/FoodSheet";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, errMsg } from "@/lib/api";
@@ -14,7 +14,9 @@ import { useAuth } from "@/lib/auth";
 import { dayTargets } from "@/lib/calc";
 import { addDays, dayLabel, longDate, suggestedMeal, todayStr } from "@/lib/date";
 import { n0, n1, portionText } from "@/lib/nutrition";
-import { MEAL_LABEL, MEALS, type DayLog, type LogEntry, type Meal, type Nutrients } from "@/lib/types";
+import { MEAL_LABEL, MEALS, type DayLog, type LogEntry, type Meal, type Nutrients, type Profile } from "@/lib/types";
+import { cn } from "@/lib/utils";
+import type { WeightPoint } from "@/lib/weight";
 
 type SheetState = { open: boolean; meal: Meal; entry?: LogEntry };
 
@@ -77,10 +79,12 @@ function MealCard({
   );
 }
 
-export function TodayView() {
+export function TodayView({ onManageCustomFoods }: { onManageCustomFoods: (name: string) => void }) {
   const { user } = useAuth();
+  const profile: Profile = user?.profile ?? {};
   const [date, setDate] = useState(todayStr);
   const [day, setDay] = useState<DayLog | null>(null);
+  const [weightEntry, setWeightEntry] = useState<WeightPoint | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
   const [sheet, setSheet] = useState<SheetState>({ open: false, meal: "breakfast" });
@@ -103,7 +107,21 @@ export function TodayView() {
     };
   }, [date, version]);
 
-  const targets = useMemo(() => dayTargets(user?.profile ?? {}, date), [user, date]);
+  useEffect(() => {
+    let cancelled = false;
+    setWeightEntry(null);
+    api<{ entries: WeightPoint[] }>(`/weights?from=${date}&to=${date}`)
+      .then(({ entries }) => {
+        if (!cancelled) setWeightEntry(entries[0] ?? null);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) toast.error(`Could not load this day's weigh-in: ${errMsg(e)}`);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [date]);
+
   const nowMeal = suggestedMeal();
   const today = todayStr();
 
@@ -214,7 +232,26 @@ export function TodayView() {
 
       {day && (
         <>
-          <DaySummary totals={day.totals} targets={targets} />
+          <DaySummary totals={day.totals} targets={dayTargets(profile, date)} />
+          {weightEntry ? (
+            <div className="grid grid-cols-2 items-stretch gap-2">
+              <Card className="h-full min-w-0 gap-2 py-3">
+                <CardHeader className="px-3 pb-0">
+                  <CardTitle className="text-sm">Weight insights</CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-1 flex-col items-center justify-center gap-1 px-3 pb-5 pt-2 text-center">
+                  <p className="text-xs font-medium text-muted-foreground">Today's weight</p>
+                  <p className="text-3xl font-bold leading-tight tracking-tight tabular-nums sm:text-4xl">
+                    {n1(weightEntry.weightKg)}
+                    <span className="ml-1 text-base font-semibold text-muted-foreground">kg</span>
+                  </p>
+                </CardContent>
+              </Card>
+              <MealSplit byMeal={day.byMeal} compact />
+            </div>
+          ) : (
+            <MealSplit byMeal={day.byMeal} />
+          )}
 
           {day.entries.length === 0 && (
             <Card>
@@ -249,7 +286,62 @@ export function TodayView() {
         entry={sheet.entry}
         onChanged={reload}
         onDelete={removeEntry}
+        onManageCustomFoods={onManageCustomFoods}
       />
     </div>
+  );
+}
+
+function MealSplit({ byMeal, compact = false }: { byMeal: DayLog["byMeal"]; compact?: boolean }) {
+  const total = MEALS.reduce((sum, meal) => sum + byMeal[meal].kcal, 0);
+  const colors = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4"];
+
+  return (
+    <Card className={cn("min-w-0", compact && "gap-2 py-3")}>
+      <CardHeader className={compact ? "px-3 pb-0" : "pb-2"}>
+        <CardTitle className={compact ? "text-sm" : "text-base"}>Meal split</CardTitle>
+        <CardDescription className={compact ? "text-xs" : undefined}>
+          {compact ? "Calories by meal" : "Share of calories for this day"}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className={cn("space-y-3", compact && "px-3")}>
+        {total === 0 ? (
+          <p className="text-sm text-muted-foreground">No calories logged for this day.</p>
+        ) : (
+          <>
+            <div className="flex h-2.5 overflow-hidden rounded-full">
+              {MEALS.map((meal, index) => {
+                const kcal = byMeal[meal].kcal;
+                if (kcal <= 0) return null;
+                return (
+                  <div
+                    key={meal}
+                    className={cn(index === 0 && "rounded-l-full", index === MEALS.length - 1 && "rounded-r-full", colors[index])}
+                    style={{ width: `${(kcal / total) * 100}%` }}
+                  />
+                );
+              })}
+            </div>
+            <ul className="space-y-2">
+              {MEALS.map((meal, index) => {
+                const kcal = byMeal[meal].kcal;
+                const pct = total ? Math.round((kcal / total) * 100) : 0;
+                return (
+                  <li key={meal} className={cn("flex items-center justify-between gap-1", compact ? "text-xs" : "text-sm")}>
+                    <span className="flex min-w-0 items-center gap-1">
+                      <span className={cn("size-2 rounded-full", colors[index])} />
+                      <span className="truncate">{MEAL_LABEL[meal]}</span>
+                    </span>
+                    <span className="shrink-0 tabular-nums text-muted-foreground">
+                      {n0(kcal)} · {pct}%
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }

@@ -27,14 +27,12 @@ insightsRouter.get("/", async (req, res) => {
   const p = user.profile;
 
   const streakFrom = shiftDate(to, -400);
-  const weightFrom = shiftDate(to, -60);
-
   const [entries, loggedDates, weights] = await Promise.all([
     LogEntry.find({ user: req.userId, date: { $gte: from, $lte: to } })
       .select("date meal totals")
       .lean(),
     LogEntry.distinct("date", { user: req.userId, date: { $gte: streakFrom, $lte: to } }),
-    WeightEntry.find({ user: req.userId, date: { $gte: weightFrom, $lte: to } })
+    WeightEntry.find({ user: req.userId, date: { $gte: from, $lte: to } })
       .sort({ date: 1 })
       .select("date weightKg")
       .lean(),
@@ -53,6 +51,8 @@ insightsRouter.get("/", async (req, res) => {
         weightKg: p?.weightKg ?? undefined,
         goalWeightKg: p?.goalWeightKg ?? undefined,
         activityFactor: p?.activityFactor ?? undefined,
+        maintenanceKcal: p?.maintenanceKcal ?? undefined,
+        cutTargetKcal: p?.cutTargetKcal ?? undefined,
         deficitKcal: p?.deficitKcal ?? undefined,
         calorieAdjustment: p?.calorieAdjustment ?? undefined,
         sundayMaintenance: p?.sundayMaintenance ?? undefined,
