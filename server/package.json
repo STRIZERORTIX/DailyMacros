@@ -17,7 +17,7 @@
     "google-auth-library": "^9.15.0",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.9.0",
+    "mongoose": "^8.24.7",
     "web-push": "^3.6.7",
     "zod": "^4.0.0"
   },
